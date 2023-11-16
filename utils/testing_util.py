@@ -164,7 +164,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                 which_type = CODE_TYPE.call_based  # Call-based
                 method_name = in_outs["fn_name"]
     elif not example_tests:
-        return [], [], [], None 
+        return [], [], [], [], None 
     elif example_tests: 
         which_type = CODE_TYPE.standard_input  # assuming this method type 
         method_name = None
@@ -174,9 +174,9 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
             with open(os.path.join(root, "example_input_output.json")) as f:
                 in_outs = json.load(f)
                 if in_outs is None: 
-                    return [], [], [], None 
+                    return [], [], [], [], None 
         else:
-            return [], [], [], None
+            return [], [], [], [], None
     
     if debug:
         print(f"loaded json = {datetime.now().time()}")
@@ -184,11 +184,14 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
     #else:
     #    continue
     if test is None:
-        return [], [], [], None 
+        return [], [], [],  [], None 
     elif test is not None:
+        
         results = []
         errors = []
         outputs = []
+        times = []
+
         sol = "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, ChainMap\nfrom functools import lru_cache\nimport math\nfrom math import sqrt, sin, cos, tan, ceil, fabs, floor, gcd, exp, log, log2\nimport fractions\nfrom typing import List, Tuple\nimport numpy as np\nimport random\nimport heapq\nfrom heapq import *\n"
         if debug:
             print(f"loading test code = {datetime.now().time()}")
@@ -213,7 +216,8 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                 results.append(-2)
                 errors.append(e)
                 outputs.append(None)
-                return results, errors, outputs, sol
+                times.append(None)
+                return results, errors, outputs, times, sol
             signal.alarm(0)
 
         elif which_type == CODE_TYPE.standard_input:
@@ -259,7 +263,8 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                 results.append(-2)
                 errors.append(e)
                 outputs.append(None)
-                return results, errors, outputs, sol 
+                times.append(None)
+                return results, errors, outputs, times, sol 
             signal.alarm(0)
         if debug:
             print(f"get method = {datetime.now().time()}")
@@ -304,8 +309,10 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                 try:
                     # print("------------")
                     # print(inputs)
+                    start_time = datetime.now()
                     output = method(*inputs)
-
+                    end_time = datetime.now()
+                    execution_time = end_time - start_time
                     # ground truth sequences are not tuples
                     if isinstance(output, tuple):
                         output = list(output)
@@ -323,6 +330,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     
                     # reset the alarm
                     signal.alarm(0)
@@ -335,9 +343,10 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(-1)
                     errors.append(e)
                     outputs.append(None) 
+                    times.append(None)
                     
                     ## TESTING TRICK: exit loop if not pass a test case 
-                    return results, errors, outputs, sol
+                    return results, errors, outputs, times, sol
                     #continue
                 faulthandler.disable()
                 signal.alarm(0)
@@ -353,10 +362,15 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     inputs = "\n".join(inputs)
                 if isinstance(in_outs['outputs'][index], list):
                     in_outs['outputs'][index] = "\n".join(in_outs['outputs'][index])
-
+                
+                # add time for standard_input program
+                execution_time = None
                 with Capturing() as output:
                     try:
+                        start_time = datetime.now()
                         call_method(method, inputs)
+                        end_time = datetime.now()
+                        execution_time = end_time - start_time
                         # reset the alarm
                         signal.alarm(0)
                         passed = True
@@ -368,8 +382,9 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                         results.append(-1)
                         errors.append(e) 
                         outputs.append(None) 
+                        times.append(None)
                         ## TESTING TRICK: exit loop if not pass a test case 
-                        return results, errors, outputs, sol
+                        return results, errors, outputs, times, sol
                     
                     signal.alarm(0)
                 
@@ -390,6 +405,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     continue
 
                 # ground truth sequences are expressed as lists not tuples
@@ -412,6 +428,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     continue
 
                 # try one more time without \n
@@ -437,6 +454,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     continue
 
                 # try by converting the output into a split up list too
@@ -454,6 +472,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     continue
 
                 try:
@@ -483,6 +502,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output_float)
+                    times.append(execution_time)
                     continue
 
                 # try by converting the stuff into split up list
@@ -503,6 +523,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                     results.append(tmp_result)
                     errors.append(None)
                     outputs.append(output)
+                    times.append(execution_time)
                     continue 
 
                 # try by converting the output into a split up list too
@@ -536,10 +557,11 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                 results.append(tmp_result)
                 errors.append(None)
                 outputs.append(output)
+                times.append(execution_time)
             
                 if tmp_result != True:
                     ## TESTING TRICK: exit loop if not pass a test case 
-                    return results, errors, outputs, sol
+                    return results, errors, outputs, times, sol
                 
                 if debug:
                     nl = "\n"
@@ -549,7 +571,7 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
                         print(f"output = {output}, test outputs = {in_outs['outputs'][index]}, inputs = {inputs}, {type(inputs)}, {output == [in_outs['outputs'][index]]}") 
 
 
-    return results, errors, outputs, sol
+    return results, errors, outputs, times, sol
 
 def custom_compare_(output, ground_truth):
     

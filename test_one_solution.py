@@ -57,15 +57,16 @@ def eval_and_save_problems(args):
         
     print("Saving to {}".format(args.output_path + '/{}.pkl'.format(real_index)))
 
-    all_results, all_errors, all_sols = [], [], []
+    all_results, all_errors, all_sols, all_times = [], [], [], []
 
     for o_idx, o in tqdm(enumerate(gen_codes), total=len(gen_codes), ncols=0, leave=False):
 
         curr_results = []
         curr_errors = []
         curr_sol = None
+        times = []
         try:
-            curr_results, curr_errors, _, curr_sol = run_test(prob_path=problem, test=o, debug=args.debug, 
+            curr_results, curr_errors, _, times, curr_sol = run_test(prob_path=problem, test=o, debug=args.debug, 
                                           example_tests=args.example_tests)
 
             curr_errors = [(e, traceback.format_tb(e.__traceback__)) if e is not None else e for e in curr_errors]
@@ -86,8 +87,9 @@ def eval_and_save_problems(args):
             all_results.append(curr_results)
             all_errors.append(curr_errors)
             all_sols.append(curr_sol)
+            all_times.append(times)
 
-        save_results = {real_index : {'results': all_results, 'errors': all_errors, 'sols': all_sols}} 
+        save_results = {real_index : {'results': all_results, "times": all_times, 'errors': all_errors, 'sols': all_sols}} 
         with open(args.output_path + '/{}.pkl'.format(real_index), "wb") as file:
             pkl.dump(save_results, file)  
 
@@ -99,7 +101,7 @@ def eval_and_save_problems(args):
     [True] = passed test case
     '''
 
-    save_results = {real_index : {'results': all_results, 'errors': all_errors, 'sols': all_sols}} 
+    save_results = {real_index : {'results': all_results, "times": all_times, 'errors': all_errors, 'sols': all_sols}} 
     pkl.dump(save_results,  open(args.output_path + '/{}.pkl'.format(real_index), "wb"))                    
 
 def main(args):    
@@ -109,3 +111,4 @@ def main(args):
 if __name__ == "__main__":
     from configs.unit_test_configs import * 
     main(args)
+    

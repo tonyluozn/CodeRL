@@ -12,6 +12,7 @@ import tempfile
 import shutil
 import os
 import io
+import numpy as np
 
 
 from datasets.reindent import run as run_reindent
@@ -67,7 +68,7 @@ def get_error_type(result, binary=False):
     else:
         raise NotImplementedError()
             
-def get_reward_from_error_type(error_type):
+def get_reward_from_error_type(error_type, runtime, scale = 1.0):
     if error_type == 0:
         # Compile error
         return -1
@@ -79,6 +80,6 @@ def get_reward_from_error_type(error_type):
         return -0.3
     elif error_type == 3:
         # Passed all unit tests
-        return 1 
+        return np.exp(-runtime*scale)
     else:
         raise NotImplementedError()
