@@ -26,8 +26,9 @@ import datasets.utils as dsutils
 class APPSBaseDataset(torch.utils.data.Dataset):
     def __init__(self, dataroot, problem_dirs, model, max_tokens, sample_mode, 
                  tuning_mode, max_src_tokens, relative_returns):
-        self.dataroot = dataroot
-        self.problem_dirs = problem_dirs 
+        self.dataroot = dataroot # data/APPS/train/
+        self.problem_dirs = problem_dirs # folders inside data/APPS/train/
+        # for example ['00001', '00002', ...]. could be all of them, could be smaller split.
 
         self.model = model
         self.sample_mode = sample_mode
@@ -39,6 +40,7 @@ class APPSBaseDataset(torch.utils.data.Dataset):
 
         self.samples = []           
         self.all_error_types, self.all_error_subtypes, self.all_baseline_error_types = [], [], []
+        self.all_runtimes, self.all_baseline_runtimes = [], []
         self.initialize()
 
         if self.model in ['codet5-base', 'codet5-large']:
@@ -60,14 +62,15 @@ class APPSBaseDataset(torch.utils.data.Dataset):
             
         return samples, info 
     
-    def load_rl_samples(self, sols, baseline_error_type): 
+    def load_rl_samples(self, sols, baseline_error_type, baseline_runtime): 
+        # load from gen_solutions_critic_scores.pkl
         samples = []
         info = []
         
         for idx, code in enumerate(sols['code']):   
             samples.append((sols['prompt'][idx], code))
-            info.append((sols['gt_error_type'][idx], sols['error_hidden_states'][idx], baseline_error_type))
-            
+            # maybe add baseline runtime here as well
+            info.append((sols['gt_error_type'][idx], sols['error_hidden_states'][idx], sols['runtimes'][idx], baseline_error_type, baseline_runtime))
         return samples, info 
      
     def load_gt_samples(self, sols, answer_type, starter_code, question_str):
@@ -95,10 +98,13 @@ class APPSBaseDataset(torch.utils.data.Dataset):
             
     def update_error_stat_rl(self, info):
         for i in info:
+            # Info (gt_error_type, error_hidden_states, runtime, baseline_error_type, baseline_runtime)
             error_type = i[0]
-            baseline_error_type = i[-1]
+            baseline_error_type = i[3]
             self.all_error_types.append(error_type)
             self.all_baseline_error_types.append(baseline_error_type) 
+            self.all_runtimes.append(i[2])
+            self.all_baseline_runtimes.append(i[4])
     
     def initialize(self):
         all_samples = []
@@ -110,7 +116,8 @@ class APPSBaseDataset(torch.utils.data.Dataset):
 
         print(f"Loading {len(self.problem_dirs)} problems from {self.dataroot}.")
         for problem_name in tqdm(self.problem_dirs):           
-            if self.tuning_mode in ['critic']:                
+            if self.tuning_mode in ['critic']:     
+                # where does gen_solutions.json come from?           
                 gen_sols_fname = [os.path.join(self.dataroot, problem_name, "gen_solutions.json")]       
 
             elif self.tuning_mode in ['rl']:
@@ -138,6 +145,7 @@ class APPSBaseDataset(torch.utils.data.Dataset):
                 answer_type = "\nUse Standard Input format\n"
                 starter_code = ""
 
+            # first, load all the ground-truth solutions
             sols_str_list = json.load(open(sols_fname, 'r'))
             gt_samples = self.load_gt_samples(sols_str_list, answer_type, starter_code, question_str)
             all_samples += gt_samples 
@@ -158,20 +166,38 @@ class APPSBaseDataset(torch.utils.data.Dataset):
                 samples_info += info
                 
             elif self.tuning_mode in ['rl']: 
-                
-                if self.relative_returns:
-                    baseline_sample = json.load(open(baseline_fname, 'r'))
-                    baseline_error_type = self.get_baseline_error_type(baseline_sample)
-                else:
-                    baseline_error_type = -1 
 
                 for fname in gen_sols_fname: 
-                    if os.path.exists(fname):
+                    # only consider samples if we have both gen_solutions_critic_scores and baseline_solutions
+                    if os.path.exists(fname) and os.path.exists(baseline_fname):
+                        if self.relative_returns:
+                            baseline_sample = json.load(open(baseline_fname, 'r'))
+                            baseline_error_type = self.get_baseline_error_type(baseline_sample)
+                            baseline_runtime = baseline_sample[0]['time']
+                            print('baseline error type: {}, baseline runtime: {}'.format(baseline_error_type, baseline_runtime))
+                            # =====  check =====
+                            if baseline_error_type == 3:
+                                # print both problem and its runtime
+                                print('problem:{}, bl runtime:{}'.format(problem_name, baseline_runtime))
+                            # ===== end check =====
+                        else:
+                            baseline_error_type = -1 
                         gen_sols = pkl.load(open(fname, 'rb'))
-                        samples, info = self.load_rl_samples(gen_sols, baseline_error_type) 
+                        # maybe add baseline runtime here as well
+                        samples, info = self.load_rl_samples(gen_sols, baseline_error_type, baseline_runtime) 
+                        
+                        # =====  check =====
+                        for i in info:
+                            error_type = i[0]
+                            runtime = i[2]
+                            if error_type == 3:
+                                print('problem:{}, runtime:{}'.format(problem_name, runtime))
+                        # ===== end check =====
+
                         self.update_error_stat_rl(info)
                         gen_samples += samples
                         samples_info += info
+                        # Info (gt_error_type, error_hidden_states, runtime, baseline_error_type, baseline_runtime)
                 
         print(f"Loaded {len(all_samples)} samples from {self.dataroot}.")
         print(f"Skipped {len(skipped_problems)} problems from {self.dataroot}.")
@@ -194,6 +220,8 @@ class APPSBaseDataset(torch.utils.data.Dataset):
         if self.relative_returns: 
             self.all_error_types = np.array(self.all_error_types)
             self.all_baseline_error_types = np.array(self.all_baseline_error_types)
+            self.all_runtimes = np.array(self.all_runtimes)
+            self.all_baseline_runtimes = np.array(self.all_baseline_runtimes)
             print('Sampled Error > Baseline error: {}/{}'.format((self.all_error_types>self.all_baseline_error_types).sum(),
                                                                   len(self.all_error_types)))
             print('Sampled Error = Baseline error: {}/{}'.format((self.all_error_types==self.all_baseline_error_types).sum(),
@@ -201,8 +229,16 @@ class APPSBaseDataset(torch.utils.data.Dataset):
             print('Sampled Error < Baseline error: {}/{}'.format((self.all_error_types<self.all_baseline_error_types).sum(),
                                                                   len(self.all_error_types)))
             
-            sample_rewards = np.array([dsutils.get_reward_from_error_type(e) for e in self.all_error_types])
-            baseline_rewards = np.array([dsutils.get_reward_from_error_type(e) for e in self.all_baseline_error_types])
+            sample_rewards = np.array([dsutils.get_reward_from_error_type(e,t) for e,t in zip(self.all_error_types, self.all_runtimes)])
+            baseline_rewards = np.array([dsutils.get_reward_from_error_type(e,t) for e,t in zip(self.all_baseline_error_types, self.all_baseline_runtimes)])
+            
+            # Inspection of rewards
+            for sample_r, baseline_r, sample_time, baseline_time in zip(sample_rewards, baseline_rewards, self.all_runtimes, self.all_baseline_runtimes):
+                if sample_r > 0:
+                    print('Sample runtime: {}, baseline runtime: {}'.format(sample_time, baseline_time))
+                    print('Sample reward: {}, baseline reward: {}'.format(sample_r, baseline_r))
+            # End inspection of rewards
+
             print("Relative returns distribution: {}".format(sorted(Counter(sample_rewards-baseline_rewards).items())))
             
     def __len__(self):
@@ -358,21 +394,23 @@ class APPSBaseDataset(torch.utils.data.Dataset):
 
     def sample_rl_task(self, item, info):
         input_ids, labels = item
-        gt_error, error_logit, baseline_error = info 
+        gt_error, error_logit, runtime, baseline_error, baseline_runtime  = info 
+        # Info (gt_error_type, error_hidden_states, runtime, baseline_error_type, baseline_runtime)
         
         softmax_fn = torch.nn.Softmax(dim=-1)
         rewards = softmax_fn(torch.tensor(error_logit))[:,gt_error]
         
         if self.relative_returns: 
-            curr_reward = dsutils.get_reward_from_error_type(gt_error)
-            baseline_reward = dsutils.get_reward_from_error_type(baseline_error) if baseline_error!=-1 else 0 
+            curr_reward = dsutils.get_reward_from_error_type(gt_error, runtime)
+            # if we ignore runtime for baseline, then make it -1.
+            baseline_reward = dsutils.get_reward_from_error_type(baseline_error, baseline_runtime)
             relative_reward = curr_reward - baseline_reward
             rewards *= relative_reward
         else:
-            rewards *= dsutils.get_reward_from_error_type(gt_error)
+            rewards *= dsutils.get_reward_from_error_type(gt_error, runtime)
         
         # masking rewards 
-        reward_mask = (error_logit == -np.float('Inf'))[:,0]
+        reward_mask = (error_logit == -float('Inf'))[:,0]
         rewards[reward_mask] = 0.0
         rl_label_ids = np.array(labels)
         rl_label_ids[reward_mask] = -100 

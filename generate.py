@@ -57,12 +57,13 @@ def generate_critic_inputs(args, test_case_path, prompt_path, solutions_path, to
     in_tokens = [tokenizer.eos_token_id] * args.source_len
     in_tokens[:len(q_tokens)] = q_tokens
     in_tokens = in_tokens[:args.source_len]
-    
+    # gen_solutions. json file
     solutions = json.load(open(solutions_path, 'r')) 
     
     all_texts = []
     gt_errors = [] 
     all_codes = [] 
+    runtimes = []
     
     for sol_index, solution in enumerate(solutions):        
         if gt_solutions: 
@@ -77,13 +78,17 @@ def generate_critic_inputs(args, test_case_path, prompt_path, solutions_path, to
             
         all_texts.append(in_tokens)
         all_codes.append(code)
+        # load runtime for a single generated program
+        runtimes.append(solution['time'])
         
         if gt_solutions: 
             gt_errors.append(dsutils.get_error_type(True, binary=args.binary_prediction))
         else:
+            # where does this result come from?
+            # gen_solution.json contains 'result' 'code'
             gt_errors.append(dsutils.get_error_type(solution['result'], binary=args.binary_prediction))
 
-    return all_texts, all_codes, gt_errors
+    return all_texts, all_codes, gt_errors, runtimes
 
 def main(args):
 
@@ -92,6 +97,7 @@ def main(args):
 
     original_problems = glob.glob(args.test_path + '/*')
     problems = sorted(original_problems) 
+    # APPS/train/*
 
     if not os.path.exists(args.output_path):
         os.makedirs(args.output_path, exist_ok=True)
@@ -142,14 +148,21 @@ def main(args):
         prompt_path = os.path.join(prob_path, "question.txt")
         starter_path = os.path.join(prob_path, "starter_code.py")
         if args.critic_scores and not args.gt_solutions: 
+            # generate programs, put into this folder 
             solutions_path = os.path.join(prob_path, "gen_solutions.json")
         else:
             solutions_path = os.path.join(prob_path, "solutions.json")
         if not os.path.exists(starter_path):
             starter_path = None
 
+
+        # Check if the problem has valid unit test results
+        if args.critic_scores and not os.path.exists(solutions_path):
+            print("Problem {} does not have gen_solutions.json".format(problem_id))
+            continue
         if args.critic_scores:
-            input_texts, input_codes, gt_error_types = generate_critic_inputs(args, test_case_path, prompt_path, solutions_path,
+            # load runtime from ge_solutions.json
+            input_texts, input_codes, gt_error_types, runtimes = generate_critic_inputs(args, test_case_path, prompt_path, solutions_path,
                                                                   tokenizer, starter_path, args.gt_solutions)
         else:
             input_text = generate_prompt(args, test_case_path, prompt_path, solutions_path, 
@@ -162,6 +175,7 @@ def main(args):
                 gt_error_tensor = torch.tensor(gt_error_types).to(device)
                 
                 curr_inputs = {'input_ids': text_tensor, 'error_types': gt_error_tensor, 'labels': code_tensor}
+                # Pass to the model to get critic hidden states
                 _, error_preds, error_hidden_states = model(**curr_inputs, return_error_hidden_states=True)
                 
                 assert len(gt_error_types) == len(error_preds)
@@ -171,9 +185,11 @@ def main(args):
                 saved_critic_scores = {'code': input_codes, 'prompt': input_texts,
                                           'gt_error_type': gt_error_types, 
                                           'pred_error_type': error_preds.cpu().numpy(),
-                                          'error_hidden_states': error_hidden_states.cpu().numpy()}
+                                          'error_hidden_states': error_hidden_states.cpu().numpy(),
+                                          'runtimes': runtimes}
                 
                 if args.gt_solutions:
+                    # save gt solutions' critic scores  APPS/train/
                     scores_loc = os.path.join(prob_path,  "solutions_critic_scores.pkl")
                 else:
                     scores_loc = os.path.join(prob_path,  "gen_solutions_critic_scores.pkl")
@@ -183,14 +199,14 @@ def main(args):
             else:
                 input_ids = torch.LongTensor(tokenizer.encode(input_text, 
                                                               verbose=False, 
-                                                              max_length=args.source_len)).unsqueeze(0).cuda()
+                                                              max_length=args.source_len)).unsqueeze(0).to(device)
 
                 num_loops = int(args.num_seqs / args.num_seqs_per_iter)
                 output_programs = [] 
                 for i in tqdm(range(num_loops), ncols=0, total=num_loops, leave=False):
                     output_ids = model.generate(
                         input_ids, 
-                        do_sample=True, 
+                        do_sample=True, # change this to False to be greedy decoding
                         temperature=args.temperature, 
                         max_length=args.max_len, 
                         num_return_sequences=args.num_seqs_per_iter,

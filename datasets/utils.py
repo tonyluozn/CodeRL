@@ -46,6 +46,9 @@ def reindent_code(codestr):
 
 
 def get_error_type(result, binary=False):
+    # check if result is a list
+    if isinstance(result, list):
+        result = result[0]
     # binary classification critic 
     if binary:
         if result == True:
@@ -68,7 +71,7 @@ def get_error_type(result, binary=False):
     else:
         raise NotImplementedError()
             
-def get_reward_from_error_type(error_type, runtime, scale = 1.0):
+def get_reward_from_error_type(error_type, runtime, scale = 0.1):
     if error_type == 0:
         # Compile error
         return -1
@@ -80,6 +83,7 @@ def get_reward_from_error_type(error_type, runtime, scale = 1.0):
         return -0.3
     elif error_type == 3:
         # Passed all unit tests
-        return np.exp(-runtime*scale)
+        # base_reward of passing tests + performance bonus 
+        return 0.5+0.5*np.exp(-runtime*scale)
     else:
         raise NotImplementedError()
