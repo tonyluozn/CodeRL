@@ -1,16 +1,17 @@
 {
-  "_name_or_path": "/export/home/apps/train/exps/apps_codet5-finetuned_error_rl_cutoff0.0_alpha1.0_losslog_gtr0_baseTrue_bs4x4_lr2e-05/final_checkpoint/",
+  "_name_or_path": "Salesforce/codet5-base",
   "architectures": [
     "T5ForConditionalGeneration"
   ],
   "bos_token_id": 1,
-  "d_ff": 4096,
+  "d_ff": 3072,
   "d_kv": 64,
-  "d_model": 1024,
+  "d_model": 768,
   "decoder_start_token_id": 0,
   "dropout_rate": 0.1,
   "eos_token_id": 2,
   "feed_forward_proj": "relu",
+  "gradient_checkpointing": false,
   "id2label": {
     "0": "LABEL_0"
   },
@@ -22,13 +23,12 @@
   "layer_norm_epsilon": 1e-06,
   "model_type": "t5",
   "n_positions": 512,
-  "num_decoder_layers": 24,
-  "num_heads": 16,
-  "num_layers": 24,
+  "num_decoder_layers": 12,
+  "num_heads": 12,
+  "num_layers": 12,
   "output_past": true,
   "pad_token_id": 0,
   "relative_attention_num_buckets": 32,
-  "return_dict": false,
   "task_specific_params": {
     "summarization": {
       "early_stopping": true,
@@ -58,8 +58,8 @@
       "prefix": "translate English to Romanian: "
     }
   },
-  "torch_dtype": "float32",
-  "transformers_version": "4.16.1",
+  "torch_dtype": "float16",
+  "transformers_version": "4.15.0",
   "use_cache": true,
   "vocab_size": 32100
 }

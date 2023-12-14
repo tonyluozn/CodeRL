@@ -1,8 +1,51 @@
+
+## RLPF: Reinforcement Learning with Profiler Feedback
+
+Note: This repository is cloned from the original repository of [CodeRL](https://github.com/salesforce/CodeRL) and modified to support the feedback from the profiler (RLPF) for program synthesis. The original README is kept below.
+
+We added the following folders to the original repository:
+
+1. `/RLPF_notebooks` contains the notebooks used to run the whole RLPF pipeline. The notebooks are named as follows:
+
+- `train_RLPF` contains workflow to train the RLPF model.
+- `compile_runtime_data` contains workflow to process all the runtime data and compile it into a single file.
+- `train_run_time_analysis` contains codes to replicate the runtime analysis results and plots.
+- `compute_pass@k_metrics` contains codes to replicate the pass@k metrics results and plots in the final project report
+- `compute_runtime_metrics` contains codes to replicate all the runtime results and plots in the final project report
+
+2. `/models_eval` contains all the figures and data files we saved during the evaluation of the RLPF model. It includes the evaluation for both the base CodeRL model and the four variants of the RLPF model. Model a,b,c,d correponds to the four variants of the RLPF model in the final project report.
+
+
+To support the added program runtime feedback from the profiler, we modified the original CodeRL code in the following files:
+
+1. `datasets/utils.py` contains the definition of the reward functions.
+2. `datasets/apps_dataset.py` contains the modified training pipeline to load the runtime feedback from the profiler.
+3. `generate_greedy.py` contains the model inference code for the greedy decoding baseline.
+4. `test_one_solution.py` contains the modified code to run the unit tests and save the runtime feedback from the profiler.
+5. `train.py` contains the modified training pipeline to load the custom APPS data from the profiler.
+
+Due to the large size of the generated data on APPS and models, we are not able to upload it to GitHub. Instead, we uploaded it to Google Drive, and the link is provided below: 
+
+Generated data: https://drive.google.com/drive/folders/1lQVtheDYS0T9fwS7tvfMcvuVOiq1mhvc?usp=sharing
+
+Models: https://drive.google.com/drive/folders/1uojkf9tQQg0xd4tM6gagsrQTEudw3Hte?usp=sharing
+
+In particular, the RLPF models are named using the following convention:
+
+- RLPF_model_a: RLPF model with reward function (2) and base reward.
+- RLPF_model_b: RLPF model with reward function (3) and base reward.
+- RLPF_model_c: RLPF model with reward function (2) without base reward.
+- RLPF_model_d: RLPF model with reward function (3) without base reward.
+
+
+
+## Original README:
+
 <p align="center">
   <img src="images/logo.jpg" width="50%">
 </p>
 
-## CodeRL: Mastering Code Generation through Pretrained Models and Deep Reinforcement Learning <a name="corl"></a>
+### CodeRL: Mastering Code Generation through Pretrained Models and Deep Reinforcement Learning <a name="corl"></a>
 
 
 This is the official code for the paper **[CodeRL: Mastering Code Generation through Pretrained Models and Deep Reinforcement Learning](https://arxiv.org/abs/2207.01780)** (accepted to [NeurIPS 2022](https://openreview.net/forum?id=WaGvb7OzySA)). Do check out our [blog](https://blog.salesforceairesearch.com/coderl/) and [poster](https://nips.cc/media/PosterPDFs/NeurIPS%202022/d98d76e2b5ba72023414d98e75403e79.png).
